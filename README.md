@@ -208,14 +208,16 @@ Skanneren kan automatisk sende JSON-rapporter til Elasticsearch, og du visualise
 
 | Visualisering | Kilde | Beskrivelse |
 |---------------|-------|-------------|
-| Nodes Online | `patchscanner-scans` | Antall reachable noder |
-| Nodes Offline / Failed | `patchscanner-scans` | Utilgjengelige noder |
-| Security vs Ordinary | `patchscanner-packages` | Fordeling av oppdateringstyper |
-| Updates per Node | `patchscanner-nodes` | Oppdateringer per node, gruppert på `cluster_host` |
-| Top Packages | `patchscanner-packages` | Mest forekommende pakker med oppdateringer |
-| Updates by Proxmox Host | `patchscanner-nodes` | Oppdateringer per `cluster_host` |
-| Scan History | `patchscanner-scans` | Historikk over totale oppdateringer |
-| Scan Duration | `patchscanner-scans` | Kjøretid per skanning |
+| Scan History — Compare All Reports | `patchscanner-scans` | Tabell: én rad per rapport med online/failed/updates/security/duration |
+| Total Scan Runs | `patchscanner-scans` | Antall indekserte rapporter fra `reports/` |
+| Total Updates per Scan | `patchscanner-scans` | Linjediagram — sammenlign oppdateringer på tvers av kjøringer |
+| Security vs Ordinary per Scan | `patchscanner-scans` | Trend for security/ordinary per rapport |
+| Node Health per Scan | `patchscanner-scans` | Online vs failed noder per rapport |
+| Node Detail per Scan | `patchscanner-nodes` | Per node, per host, per skanning |
+| Updates per Node over Time | `patchscanner-nodes` | Hver node sporet på tvers av rapporter |
+| Updates per Proxmox Host over Time | `patchscanner-nodes` | `cluster_host` sammenlignet over tid |
+| Package Versions per Scan | `patchscanner-packages` | Pakkenavn, versjoner, node, host, type |
+| Top Packages | `patchscanner-packages` | Mest rapporterte pakker på tvers av historikk |
 
 ### 1. Start Elasticsearch og Kibana (Docker)
 
@@ -315,6 +317,9 @@ Hvis en node er nede, feiler scriptet med exit code 1 (nyttig for cron-varsling)
 | `KIBANA_DASHBOARD_ID` | `ps-dashboard-main` | Dashboard-ID å åpne |
 | `OPEN_BROWSER` | `true` | Sett `false` på headless server / cron |
 | `SKIP_DOCKER` | `false` | Sett `true` hvis ES/Kibana kjører et annet sted |
+| `NO_PAUSE` | `false` | Sett `true` for cron — hopper over «Press Enter» på slutten |
+
+All output lagres også i **`logs/scan_and_analyze.log`** — åpne den filen hvis terminalen lukker for fort.
 
 **Cron-eksempel** (ukentlig skanning uten nettleser):
 
@@ -345,6 +350,7 @@ proxmox-patchscanner/
 ├── .env.example
 ├── scripts/
 │   ├── import_reports.py
+│   ├── build_dashboard.py
 │   ├── setup_kibana.py
 │   └── scan_and_analyze.sh
 ├── kibana/
