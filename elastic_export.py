@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 from typing import Any
 
 from config import (
@@ -11,6 +13,7 @@ from config import (
     ELASTICSEARCH_PASSWORD,
     ELASTICSEARCH_URL,
     ELASTICSEARCH_USER,
+    OUTPUT_DIR,
 )
 
 SCAN_INDEX = f"{ELASTICSEARCH_INDEX_PREFIX}-scans"
@@ -18,6 +21,65 @@ NODE_INDEX = f"{ELASTICSEARCH_INDEX_PREFIX}-nodes"
 PACKAGE_INDEX = f"{ELASTICSEARCH_INDEX_PREFIX}-packages"
 
 INDICES = (SCAN_INDEX, NODE_INDEX, PACKAGE_INDEX)
+
+
+def list_report_filenames(directory: str | None = None) -> list[str]:
+    directory = directory or OUTPUT_DIR
+    if not os.path.isdir(directory):
+        return []
+    return sorted(
+        filename
+        for filename in os.listdir(directory)
+        if filename.startswith("patch_report_") and filename.endswith(".json")
+    )
+
+
+def export_context_for_report(
+    report_path: str,
+    *,
+    output_dir: str | None = None,
+) -> tuple[int, str, dict[str, Any] | None]:
+    """scan_index, report_file basename, and prior scan summary for delta fields."""
+    output_dir = output_dir or OUTPUT_DIR
+    report_file = os.path.basename(report_path)
+    files = list_report_filenames(output_dir)
+    if report_file not in files:
+        files = sorted(files + [report_file])
+
+    scan_index = files.index(report_file) + 1
+    previous_summary = None
+    position = files.index(report_file)
+    if position > 0:
+        prev_path = os.path.join(output_dir, files[position - 1])
+        with open(prev_path, encoding="utf-8") as handle:
+            prev_report = json.load(handle)
+        prev_summary = prev_report.get("summary") or {}
+        total_updates = prev_summary.get("total_updates") or prev_summary.get("updates_total")
+        previous_summary = {
+            "duration_seconds": prev_report.get("duration_seconds"),
+            "total_updates": total_updates,
+            "updates_total": total_updates,
+        }
+
+    return scan_index, report_file, previous_summary
+
+
+def export_saved_report(
+    report: dict[str, Any],
+    report_path: str,
+    *,
+    output_dir: str | None = None,
+) -> dict[str, int]:
+    scan_index, report_file, previous_summary = export_context_for_report(
+        report_path,
+        output_dir=output_dir,
+    )
+    return export_report(
+        report,
+        scan_index=scan_index,
+        report_file=report_file,
+        previous_summary=previous_summary,
+    )
 
 
 def _first(*values: Any, default: Any = None) -> Any:

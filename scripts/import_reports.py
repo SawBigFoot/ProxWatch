@@ -12,13 +12,13 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from config import OUTPUT_DIR
-from elastic_export import export_report, reset_indices, _create_client
-
-
-def iter_report_files(directory: str):
-    for filename in sorted(os.listdir(directory)):
-        if filename.startswith("patch_report_") and filename.endswith(".json"):
-            yield os.path.join(directory, filename)
+from elastic_export import (
+    export_context_for_report,
+    export_report,
+    list_report_filenames,
+    reset_indices,
+    _create_client,
+)
 
 
 def main():
@@ -39,7 +39,7 @@ def main():
         print(f"Directory not found: {args.dir}", file=sys.stderr)
         sys.exit(1)
 
-    files = list(iter_report_files(args.dir))
+    files = [os.path.join(args.dir, name) for name in list_report_filenames(args.dir)]
     if not files:
         print(f"No report files found in {args.dir}")
         sys.exit(0)
@@ -49,19 +49,22 @@ def main():
         reset_indices(_create_client())
 
     total_indexed = 0
-    previous_summary = None
 
-    for scan_index, path in enumerate(files, start=1):
+    for path in files:
         with open(path, encoding="utf-8") as handle:
             report = json.load(handle)
 
+        scan_index, report_file, previous_summary = export_context_for_report(
+            path,
+            output_dir=args.dir,
+        )
         summary = report.get("summary") or {}
         total_updates = summary.get("total_updates") or summary.get("updates_total")
 
         result = export_report(
             report,
             scan_index=scan_index,
-            report_file=os.path.basename(path),
+            report_file=report_file,
             previous_summary=previous_summary,
         )
         if not result.get("enabled"):
@@ -70,16 +73,11 @@ def main():
 
         total_indexed += result["indexed"]
         print(
-            f"Imported #{scan_index} {os.path.basename(path)}: "
+            f"Imported #{scan_index} {report_file}: "
             f"{result['indexed']} docs "
             f"(duration={report.get('duration_seconds')}s, "
             f"updates={total_updates})"
         )
-        previous_summary = {
-            "duration_seconds": report.get("duration_seconds"),
-            "total_updates": total_updates,
-            "updates_total": total_updates,
-        }
 
     print(f"Done. {len(files)} reports indexed, {total_indexed} total documents")
 
