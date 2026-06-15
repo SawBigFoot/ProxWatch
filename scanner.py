@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import time
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -12,7 +13,7 @@ from config import (
     OUTPUT_DIR,
     TIMEOUT_SECONDS,
 )
-from elastic_export import export_report
+from elastic_export import export_saved_report
 
 if not VERIFY_SSL:
     import urllib3
@@ -29,7 +30,7 @@ SECURITY_CLASSIFICATION_NOTE = (
 
 
 def now_iso():
-    return datetime.now().replace(microsecond=0).isoformat()
+    return datetime.now().isoformat(timespec="microseconds")
 
 
 def make_scan_id(start_time):
@@ -279,18 +280,13 @@ def save_report(report):
     return filename
 
 
-def _parse_expected_nodes() -> int | None:
-    raw = os.getenv("EXPECTED_NODES", "").strip()
-    if not raw:
-        return None
-    return int(raw)
-
-
 def main():
-    expected_nodes = _parse_expected_nodes()
+    expected_raw = os.getenv("EXPECTED_NODES", "").strip()
+    expected_nodes = int(expected_raw) if expected_raw else None
 
-    start_time_dt = datetime.now().replace(microsecond=0)
-    start_time = start_time_dt.isoformat()
+    start_clock = time.perf_counter()
+    start_time_dt = datetime.now()
+    start_time = start_time_dt.isoformat(timespec="microseconds")
     clusters = load_clusters()
 
     report = {
@@ -312,11 +308,11 @@ def main():
     for cluster in clusters:
         report["nodes"].extend(scan_cluster(cluster))
 
-    end_time_dt = datetime.now().replace(microsecond=0)
-    report["end_time"] = end_time_dt.isoformat()
+    end_time_dt = datetime.now()
+    report["end_time"] = end_time_dt.isoformat(timespec="microseconds")
     report["generated_at"] = report["end_time"]
     report["summary"] = build_summary(report["nodes"])
-    report["duration_seconds"] = round((end_time_dt - start_time_dt).total_seconds(), 2)
+    report["duration_seconds"] = round(time.perf_counter() - start_clock, 2)
 
     filename = save_report(report)
 
@@ -328,7 +324,7 @@ def main():
     healthy = print_node_health(report["nodes"], expected_nodes)
 
     try:
-        es_result = export_report(report)
+        es_result = export_saved_report(report, filename)
         if es_result.get("enabled"):
             print(
                 "Elasticsearch: indexed "
