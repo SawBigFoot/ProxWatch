@@ -44,7 +44,7 @@ PYTHON="$(detect_python)"
 KIBANA_URL="${KIBANA_URL:-http://localhost:5601}"
 KIBANA_DASHBOARD_ID="${KIBANA_DASHBOARD_ID:-ps-dashboard-main}"
 ELASTICSEARCH_URL="${ELASTICSEARCH_URL:-http://localhost:9200}"
-EXPECTED_NODES="${EXPECTED_NODES:-2}"
+# EXPECTED_NODES is optional — leave unset to accept any number of discovered nodes
 OPEN_BROWSER="${OPEN_BROWSER:-true}"
 SKIP_DOCKER="${SKIP_DOCKER:-false}"
 
@@ -143,10 +143,13 @@ sync_reports_to_es() {
 }
 
 run_scan() {
-  log "Running patch scan (expected nodes: ${EXPECTED_NODES})"
+  if [[ -n "${EXPECTED_NODES:-}" ]]; then
+    log "Running patch scan (expected nodes: ${EXPECTED_NODES})"
+  else
+    log "Running patch scan (any number of nodes)"
+  fi
   log "Using Python: $("$PYTHON" --version 2>&1)"
   export ELASTICSEARCH_ENABLED="${ELASTICSEARCH_ENABLED:-true}"
-  export EXPECTED_NODES
 
   if ! "$PYTHON" scanner.py; then
     echo "Scan finished with node health failures. See output above." >&2
@@ -185,7 +188,7 @@ main() {
   sync_reports_to_es
   verify_es_data
   open_dashboard "$DASHBOARD_URL"
-  log "Done — both nodes healthy and dashboard opened"
+  log "Done — scan completed and dashboard opened"
 }
 
 trap pause_at_end EXIT

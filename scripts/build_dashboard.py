@@ -303,7 +303,7 @@ def build_objects():
         )
     )
 
-    # Per-node nuance: 2 bars per scan (one per Proxmox host)
+    # Per-node breakdown: one grouped bar per discovered node @ host
     items.append(
         viz(
             "ps-vis-node-updates-bars",
@@ -324,7 +324,7 @@ def build_objects():
                         "schema": "group",
                         "params": {
                             "field": "node_host_label",
-                            "size": 20,
+                            "size": 100,
                             "customLabel": "Node @ host",
                         },
                     },
@@ -353,7 +353,7 @@ def build_objects():
                         "schema": "group",
                         "params": {
                             "field": "cluster_host_label",
-                            "size": 10,
+                            "size": 50,
                             "customLabel": "Host",
                         },
                     },

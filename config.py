@@ -35,6 +35,13 @@ def _cluster_from_env(suffix=""):
 
 
 def load_clusters():
+    """Load one or more Proxmox API endpoints from environment variables.
+
+    Primary: PROXMOX_HOST, PROXMOX_TOKEN_ID, PROXMOX_TOKEN_SECRET
+    Additional hosts use the same names with a numeric suffix: _2, _3, _4, ...
+    Each host is scanned independently; every node returned by its /nodes API
+    is included in the report.
+    """
     clusters = []
 
     primary = _cluster_from_env("")

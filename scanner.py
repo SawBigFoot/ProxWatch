@@ -279,10 +279,15 @@ def save_report(report):
     return filename
 
 
+def _parse_expected_nodes() -> int | None:
+    raw = os.getenv("EXPECTED_NODES", "").strip()
+    if not raw:
+        return None
+    return int(raw)
+
+
 def main():
-    expected_nodes = os.getenv("EXPECTED_NODES")
-    if expected_nodes:
-        expected_nodes = int(expected_nodes)
+    expected_nodes = _parse_expected_nodes()
 
     start_time_dt = datetime.now().replace(microsecond=0)
     start_time = start_time_dt.isoformat()
@@ -317,7 +322,7 @@ def main():
 
     print(f"Report saved: {filename}")
     print(f"Duration: {report['duration_seconds']} seconds")
-    print(f"Hosts scanned: {len(clusters)}")
+    print(f"Hosts scanned: {len(clusters)} ({len(report['nodes'])} node(s) total)")
     print(json.dumps(report["summary"], indent=4))
 
     healthy = print_node_health(report["nodes"], expected_nodes)

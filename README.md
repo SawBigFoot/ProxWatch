@@ -20,7 +20,7 @@ Automatisk verktøy som henter patchstatus fra et Proxmox VE-miljø og lagrer en
 | F-04 | Lagre JSON automatisk ved kjøring | Ja |
 | F-05 | Vise utilgjengelig node uten stille feil | Ja |
 | NF-01 | Ingen passord i kode | Ja — token i `.env` |
-| NF-02 | Full skanning under 60 sek (minst 2 noder) | Ja — `duration_seconds` i rapport |
+| NF-02 | Full skanning under 60 sek | Ja — `duration_seconds` i rapport |
 | NF-03 | README + versjonskontroll | Ja — denne filen + Git |
 | NF-04 | Planlagt kjøring dokumentert | Ja — cron-eksempel nedenfor |
 
@@ -43,13 +43,12 @@ Opprett token i Proxmox (Datacenter → Permissions → API Tokens). Bruk minst 
 
 ### NF-02 — Kjøretid under 60 sekunder (akseptansekriterium)
 
-Verifisert ved kjøring mot testmiljø med **to noder** (to Proxmox-hosts):
+Verifisert ved kjøring mot testmiljø med **flere noder** (ett eller flere Proxmox-hosts):
 
 | Måling | Verdi |
 |--------|-------|
-| Noder skannet | 2 |
-| Noder online | 2 |
-| Kjøretid | **2,16 sekunder** (`duration_seconds` i rapport) |
+| Noder skannet | Alle noder oppdaget via API |
+| Kjøretid | **2,16 sekunder** (`duration_seconds` i rapport, eksempel med 2 noder) |
 | Krav | < 60 sekunder — **oppfylt** |
 
 Bevis ligger i JSON-rapporten (`start_time`, `end_time`, `duration_seconds`) og terminaloutput ved kjøring. Kjør `python scanner.py` på nytt for å generere fersk rapport.
@@ -83,7 +82,7 @@ pip3 install -r requirements.txt
 
 ```bash
 cp .env.example .env
-nano .env   # fyll inn PROXMOX_HOST, token og eventuelt PROXMOX_HOST_2
+nano .env   # fyll inn PROXMOX_HOST, token og eventuelle PROXMOX_HOST_2, _3, ...
 chmod 600 .env
 ```
 
@@ -148,12 +147,14 @@ Rapporter lagres automatisk i `reports/` med tidsstempel i filnavn.
    | `PROXMOX_HOST` | Proxmox URL, f.eks. `https://192.168.1.10:8006` |
    | `PROXMOX_TOKEN_ID` | Token ID, f.eks. `root@pam!patchscanner` |
    | `PROXMOX_TOKEN_SECRET` | Token secret |
-   | `PROXMOX_HOST_2` | *(Valgfritt)* Andre Proxmox-host for NF-02 |
-   | `PROXMOX_TOKEN_ID_2` | Token ID for host 2 |
-   | `PROXMOX_TOKEN_SECRET_2` | Token secret for host 2 |
+   | `PROXMOX_HOST_2`, `_3`, `_4`, … | *(Valgfritt)* Flere Proxmox-hosts — legg til så mange du trenger |
+   | `PROXMOX_TOKEN_ID_2`, `_3`, … | Token ID for hver ekstra host |
+   | `PROXMOX_TOKEN_SECRET_2`, `_3`, … | Token secret for hver ekstra host |
    | `VERIFY_SSL` | `true` eller `false` (testmiljø med self-signed cert) |
    | `OUTPUT_DIR` | Mappe for rapporter (standard: `reports`) |
    | `TIMEOUT_SECONDS` | API-timeout (standard: 20) |
+
+   **Flere noder:** Hver `PROXMOX_HOST` er ett API-endepunkt (cluster). Skanneren henter **alle noder** fra hvert cluster automatisk via `/nodes`. For tre separate hosts setter du `PROXMOX_HOST`, `PROXMOX_HOST_2` og `PROXMOX_HOST_3` med tilhørende tokens. For ett cluster med flere noder trenger du bare én `PROXMOX_HOST` — alle noder i clusteret inkluderes.
 
 4. **Opprett API-token i Proxmox**
 
@@ -171,13 +172,15 @@ Forventet terminaloutput:
 ```
 Report saved: reports/patch_report_2026-06-13_18-03-06.json
 Duration: 2.37 seconds
-Hosts scanned: 2
+Hosts scanned: 2 (2 node(s) total)
 {
     "nodes_total": 2,
     "nodes_online": 2,
     ...
 }
 ```
+
+Antall noder avhenger av miljøet — eksempelet over er fra et oppsett med to hosts/noder.
 
 Ta **skjermbilde av denne outputen** til teknisk rapport / muntlig gjennomgang.
 
@@ -281,7 +284,7 @@ Utvid cron-jobb fra NF-04 med `ELASTICSEARCH_ENABLED=true` i `.env` på serveren
 
 ### Automatisk skanning + Kibana (bash)
 
-Én kommando starter stacken, kjører skanning, verifiserer at begge noder er friske, pusher til Elasticsearch og åpner dashboardet:
+Én kommando starter stacken, kjører skanning, verifiserer nodehelse, pusher til Elasticsearch og åpner dashboardet:
 
 ```bash
 chmod +x scripts/scan_and_analyze.sh
@@ -293,7 +296,7 @@ Scriptet gjør følgende:
 1. Starter `docker compose` hvis Elasticsearch ikke kjører
 2. Venter til Elasticsearch og Kibana er klare
 3. Installerer Kibana-dashboard første gang (hvis det mangler)
-4. Kjører `scanner.py` med node-helsesjekk (`EXPECTED_NODES=2`)
+4. Kjører `scanner.py` med node-helsesjekk (valgfritt `EXPECTED_NODES`)
 5. Åpner **Proxmox Patch Scanner**-dashboardet i nettleseren
 
 **Node-helsesjekk** — etter hver skanning skrives status per node:
@@ -306,13 +309,15 @@ Node health:
 All 2 node(s) are online and reachable.
 ```
 
+(Eksempel med to noder — meldingen viser faktisk antall oppdagede noder.)
+
 Hvis en node er nede, feiler scriptet med exit code 1 (nyttig for cron-varsling).
 
 **Miljøvariabler** (`.env`):
 
 | Variabel | Standard | Beskrivelse |
 |----------|----------|-------------|
-| `EXPECTED_NODES` | `2` | Forventet antall noder — script feiler hvis antall avviker |
+| `EXPECTED_NODES` | *(tom)* | Valgfritt — feil hvis antall oppdagede noder avviker. Utelat for å akseptere alle |
 | `KIBANA_URL` | `http://localhost:5601` | Kibana-base-URL — **must use `http://`**, not `https://` |
 | `KIBANA_DASHBOARD_ID` | `ps-dashboard-main` | Dashboard-ID å åpne |
 | `OPEN_BROWSER` | `true` | Sett `false` på headless server / cron |
